@@ -67,13 +67,14 @@ class PropertyController extends Controller
         }
 
         // Check if favourited by current user AND if already rented/booked by user
-        if (Auth::check() && Auth::user()->isTenant()) {
-            $query->withCount(['favourites as favourited' => function ($q) {
-                $q->where('tenant_id', Auth::id());
+        if (Auth::check()) {
+            $userId = Auth::id();
+            $query->withCount(['favourites as favourited' => function ($q) use ($userId) {
+                $q->where('tenant_id', $userId);
             }]);
 
-            $query->withCount(['rentals as rented_by_me' => function ($q) {
-                $q->where('tenant_id', Auth::id())
+            $query->withCount(['rentals as rented_by_me' => function ($q) use ($userId) {
+                $q->where('tenant_id', $userId)
                   ->where('status', 'active');
             }]);
         }
@@ -181,13 +182,14 @@ class PropertyController extends Controller
         }
 
         // Check if favourited by current user AND if already rented/booked by user
-        if (Auth::check() && Auth::user()->isTenant()) {
-            $property->favourited = Favourite::where('tenant_id', Auth::id())
+        if (Auth::check()) {
+            $userId = Auth::id();
+            $property->favourited = Favourite::where('tenant_id', $userId)
                 ->where('property_id', $id)
                 ->exists();
 
             $property->rented_by_me = $property->rentals()
-                ->where('tenant_id', Auth::id())
+                ->where('tenant_id', $userId)
                 ->where('status', 'active')
                 ->exists();
         }
