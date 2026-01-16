@@ -69,24 +69,21 @@ class PropertyController extends Controller
         // Check if favourited by current user AND if already rented/booked by user
         if (Auth::check()) {
             $userId = Auth::id();
-            $userRole = Auth::user()->role;
 
-            \Log::info("Authenticated user", [
+            \Log::info("Loading favourites for user", [
                 'user_id' => $userId,
-                'role' => $userRole,
-                'is_tenant' => Auth::user()->isTenant()
+                'expected_favourite' => \DB::table('favourites')->where('tenant_id', $userId)->where('property_id', 22)->exists()
             ]);
 
             $query->withCount(['favourites as favourited' => function ($q) use ($userId) {
                 $q->where('tenant_id', $userId);
+                \Log::info("Favourite query SQL", ['sql' => $q->toSql()]);
             }]);
 
             $query->withCount(['rentals as rented_by_me' => function ($q) use ($userId) {
                 $q->where('tenant_id', $userId)
                   ->where('status', 'active');
             }]);
-        } else {
-            \Log::info("Not authenticated");
         }
 
         // Search
@@ -100,7 +97,7 @@ class PropertyController extends Controller
         }
 
         // Sort
-        $sortBy = $request->get('sort_by', 'created_at');
+        $sortBy = $request->get('sort_by', 'id');
         $sortOrder = $request->get('sort_order', 'desc');
         $query->orderBy($sortBy, $sortOrder);
 

@@ -34,7 +34,7 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // Public property routes (accessible to both authenticated and unauthenticated users)
-Route::middleware('auth:sanctum,optional')->group(function () {
+Route::middleware('auth.optional')->group(function () {
     Route::get('/properties', [PropertyController::class, 'index']);
     Route::get('/properties/{id}', [PropertyController::class, 'show']);
     Route::get('/properties/{id}/reviews', [ReviewController::class, 'getPropertyReviews']);
