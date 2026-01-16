@@ -69,6 +69,14 @@ class PropertyController extends Controller
         // Check if favourited by current user AND if already rented/booked by user
         if (Auth::check()) {
             $userId = Auth::id();
+            $userRole = Auth::user()->role;
+
+            \Log::info("Authenticated user", [
+                'user_id' => $userId,
+                'role' => $userRole,
+                'is_tenant' => Auth::user()->isTenant()
+            ]);
+
             $query->withCount(['favourites as favourited' => function ($q) use ($userId) {
                 $q->where('tenant_id', $userId);
             }]);
@@ -77,6 +85,8 @@ class PropertyController extends Controller
                 $q->where('tenant_id', $userId)
                   ->where('status', 'active');
             }]);
+        } else {
+            \Log::info("Not authenticated");
         }
 
         // Search
@@ -153,8 +163,12 @@ class PropertyController extends Controller
         if ($request->hasFile('image')) {
             $image = $request->file('image');
             $filename = time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('properties', $filename, 'public');
-            $data['image'] = $path;
+
+            // Save to uploads folder (same as raw PHP project)
+            $destinationPath = public_path('uploads/properties');
+            $image->move($destinationPath, $filename);
+
+            $data['image'] = 'uploads/properties/' . $filename;
         }
 
         $property = Property::create($data);
@@ -254,14 +268,18 @@ class PropertyController extends Controller
         // Handle image upload
         if ($request->hasFile('image')) {
             // Delete old image
-            if ($property->image) {
-                Storage::disk('public')->delete($property->image);
+            if ($property->image && file_exists(public_path($property->image))) {
+                unlink(public_path($property->image));
             }
 
             $image = $request->file('image');
             $filename = time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('properties', $filename, 'public');
-            $data['image'] = $path;
+
+            // Save to uploads folder
+            $destinationPath = public_path('uploads/properties');
+            $image->move($destinationPath, $filename);
+
+            $data['image'] = 'uploads/properties/' . $filename;
         }
 
         $property->update($data);
@@ -296,12 +314,15 @@ class PropertyController extends Controller
         }
 
         // Delete images
-        if ($property->image) {
-            Storage::disk('public')->delete($property->image);
+        if ($property->image && file_exists(public_path($property->image))) {
+            unlink(public_path($property->image));
         }
 
         foreach ($property->gallery as $image) {
-            Storage::disk('public')->delete($image->image_path);
+            $imagePath = public_path($image->image_path);
+            if (file_exists($imagePath)) {
+                unlink($imagePath);
+            }
         }
 
         $property->delete();
@@ -348,19 +369,27 @@ class PropertyController extends Controller
         }
 
         $uploadedImages = [];
+        $destinationPath = public_path('uploads/properties/' . $property->id);
+
+        // Create directory if it doesn't exist
+        if (!file_exists($destinationPath)) {
+            mkdir($destinationPath, 0755, true);
+        }
 
         foreach ($request->file('images') as $image) {
             $filename = time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-            $path = $image->storeAs('property-gallery', $filename, 'public');
+            $image->move($destinationPath, $filename);
+
+            $relativePath = 'uploads/properties/' . $property->id . '/' . $filename;
 
             $gallery = PropertyGallery::create([
                 'property_id' => $property->id,
-                'image_path' => $path,
+                'image_path' => $relativePath,
             ]);
 
             $uploadedImages[] = [
                 'id' => $gallery->id,
-                'image_path' => Storage::url($path),
+                'image_path' => url($relativePath),
             ];
         }
 
@@ -395,7 +424,10 @@ class PropertyController extends Controller
             ], 403);
         }
 
-        Storage::disk('public')->delete($image->image_path);
+        $imagePath = public_path($image->image_path);
+        if (file_exists($imagePath)) {
+            unlink($imagePath);
+        }
         $image->delete();
 
         return response()->json([

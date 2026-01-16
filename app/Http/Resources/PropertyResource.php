@@ -4,6 +4,8 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class PropertyResource extends JsonResource
 {
@@ -14,6 +16,26 @@ class PropertyResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Helper function to generate full URLs for images
+        $getImageUrl = function($path) {
+            if (!$path) return null;
+            // If already a full URL, return as is
+            if (Str::startsWith($path, 'http')) return $path;
+
+            // Use Laravel's asset() helper with proper encoding
+            $url = asset($path);
+
+            // Ensure the path component is properly encoded
+            $parts = parse_url($url);
+            if (isset($parts['path'])) {
+                // Encode the path but preserve the directory structure
+                $encodedPath = implode('/', array_map('rawurlencode', explode('/', $parts['path'])));
+                $url = str_replace($parts['path'], $encodedPath, $url);
+            }
+
+            return $url;
+        };
+
         return [
             'id' => $this->id,
             'property_name' => $this->property_name,
@@ -21,8 +43,8 @@ class PropertyResource extends JsonResource
             'rent' => (int) $this->rent,
             'landlord' => $this->landlord,
             'landlord_id' => $this->landlord_id,
-            'image' => $this->image,
-            'thumbnail' => $this->thumbnail,
+            'image' => $getImageUrl($this->image),
+            'thumbnail' => $getImageUrl($this->thumbnail),
             'bedrooms' => (int) $this->bedrooms,
             'bathrooms' => (int) $this->bathrooms,
             'property_type' => $this->property_type,
@@ -50,7 +72,14 @@ class PropertyResource extends JsonResource
                 return $landlord ? new UserResource($landlord) : null;
             }),
             'units' => PropertyUnitResource::collection($this->whenLoaded('units')),
-            'gallery' => $this->whenLoaded('gallery'),
+            'gallery' => $this->whenLoaded('gallery', function() use ($getImageUrl) {
+                return $this->gallery->map(function($image) use ($getImageUrl) {
+                    return [
+                        'id' => $image->id,
+                        'image_path' => $getImageUrl($image->image_path),
+                    ];
+                });
+            }),
             'amenities' => $this->whenLoaded('amenities'),
             'reviews' => $this->whenLoaded('reviews'),
             'favourited' => isset($this->favourited) ? (bool) $this->favourited :
