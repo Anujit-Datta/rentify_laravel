@@ -54,9 +54,9 @@ class PropertyResource extends JsonResource
             'amenities' => $this->whenLoaded('amenities'),
             'reviews' => $this->whenLoaded('reviews'),
             'favourited' => isset($this->favourited) ? (bool) $this->favourited :
-                          (isset($this->favourited_count) ? ($this->favourited_count > 0) : null),
+                          (isset($this->favourited_count) ? ($this->favourited_count > 0) : false),
             'rented_by_me' => isset($this->rented_by_me) ? (bool) $this->rented_by_me :
-                            (isset($this->rented_by_me_count) ? ($this->rented_by_me_count > 0) : null),
+                            (isset($this->rented_by_me_count) ? ($this->rented_by_me_count > 0) : false),
         ];
     }
 }
