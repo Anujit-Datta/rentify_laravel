@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\PropertyResource;
 use App\Http\Resources\RentalRequestResource;
+use App\Models\Notification;
 use App\Models\Property;
 use App\Models\RentalRequest;
-use App\Models\Notification;
-use App\Models\PropertyUnit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -35,7 +33,7 @@ class RentalRequestController extends Controller
         } else {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
+                'message' => 'Unauthorized',
             ], 403);
         }
 
@@ -59,7 +57,7 @@ class RentalRequestController extends Controller
                 'per_page' => $requests->perPage(),
                 'current_page' => $requests->currentPage(),
                 'last_page' => $requests->lastPage(),
-            ]
+            ],
         ]);
     }
 
@@ -70,10 +68,10 @@ class RentalRequestController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->isTenant()) {
+        if (! $user->isTenant()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only tenants can submit rental requests'
+                'message' => 'Only tenants can submit rental requests',
             ], 403);
         }
 
@@ -81,14 +79,18 @@ class RentalRequestController extends Controller
             'property_id' => 'required|exists:properties,id',
             'unit_id' => 'nullable|exists:property_units,id',
             'move_in_date' => 'required|date|after:today',
-            'payment_method' => 'required|in:bank_transfer,hand_cash,mobile_banking,check',
-            'has_pets' => 'required|in:yes,no',
+            'rental_duration' => 'required|integer|min:1|max:60', // in months (max 5 years)
+            'monthly_rent' => 'required|numeric|min:0',
+            'security_deposit' => 'required|numeric|min:0',
+            'payment_method' => 'nullable|in:bank_transfer,hand_cash,mobile_banking,check',
+            'has_pets' => 'required|boolean',
             'current_address' => 'nullable|string',
-            'num_occupants' => 'required|integer|min:1',
+            'num_occupants' => 'nullable|integer|min:1',
             'occupation' => 'nullable|string|max:100',
-            'emergency_contact' => 'required|string|max:255',
-            'emergency_phone' => 'required|string|max:20',
-            'notes' => 'nullable|string',
+            'emergency_contact' => 'nullable|string|max:255',
+            'emergency_phone' => 'nullable|string|max:20',
+            'notes' => 'nullable|string|max:1000',
+            'message_to_landlord' => 'nullable|string|max:1000',
             'documents' => 'nullable|array',
             'documents.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
             'terms' => 'required|accepted',
@@ -98,16 +100,16 @@ class RentalRequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422);
         }
 
         $property = Property::find($request->property_id);
 
-        if (!$property) {
+        if (! $property) {
             return response()->json([
                 'success' => false,
-                'message' => 'Property not found'
+                'message' => 'Property not found',
             ], 404);
         }
 
@@ -120,7 +122,7 @@ class RentalRequestController extends Controller
         if ($existingRequest) {
             return response()->json([
                 'success' => false,
-                'message' => 'You already have an active request for this property'
+                'message' => 'You already have an active request for this property',
             ], 400);
         }
 
@@ -134,6 +136,9 @@ class RentalRequestController extends Controller
             'tenant_phone' => $user->phone ?? '',
             'national_id' => $user->nid_number,
             'move_in_date' => $request->move_in_date,
+            'rental_duration' => $request->rental_duration,
+            'monthly_rent' => $request->monthly_rent,
+            'security_deposit' => $request->security_deposit,
             'payment_method' => $request->payment_method,
             'has_pets' => $request->has_pets,
             'current_address' => $request->current_address,
@@ -142,6 +147,7 @@ class RentalRequestController extends Controller
             'emergency_contact' => $request->emergency_contact,
             'emergency_phone' => $request->emergency_phone,
             'notes' => $request->notes,
+            'message_to_landlord' => $request->message_to_landlord,
             'status' => 'pending',
             'terms' => true,
         ];
@@ -150,7 +156,7 @@ class RentalRequestController extends Controller
         if ($request->hasFile('documents')) {
             $documentPaths = [];
             foreach ($request->file('documents') as $document) {
-                $filename = time() . '_' . Str::random(10) . '.' . $document->getClientOriginalExtension();
+                $filename = time().'_'.Str::random(10).'.'.$document->getClientOriginalExtension();
                 $path = $document->storeAs('rental-documents', $filename, 'public');
                 $documentPaths[] = $path;
             }
@@ -173,7 +179,7 @@ class RentalRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Rental request submitted successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant']))
+            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
         ], 201);
     }
 
@@ -185,10 +191,10 @@ class RentalRequestController extends Controller
         $user = Auth::user();
         $request = RentalRequest::with(['property', 'unit', 'tenant'])->find($id);
 
-        if (!$request) {
+        if (! $request) {
             return response()->json([
                 'success' => false,
-                'message' => 'Rental request not found'
+                'message' => 'Rental request not found',
             ], 404);
         }
 
@@ -196,20 +202,20 @@ class RentalRequestController extends Controller
         if ($user->isTenant() && $request->tenant_id !== $user->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
+                'message' => 'Unauthorized',
             ], 403);
         }
 
         if ($user->isLandlord() && $request->property->landlord_id !== $user->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
+                'message' => 'Unauthorized',
             ], 403);
         }
 
         return response()->json([
             'success' => true,
-            'data' => new RentalRequestResource($request)
+            'data' => new RentalRequestResource($request),
         ]);
     }
 
@@ -220,19 +226,19 @@ class RentalRequestController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->isLandlord()) {
+        if (! $user->isLandlord()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only landlords can approve requests'
+                'message' => 'Only landlords can approve requests',
             ], 403);
         }
 
         $rentalRequest = RentalRequest::with('property')->find($id);
 
-        if (!$rentalRequest) {
+        if (! $rentalRequest) {
             return response()->json([
                 'success' => false,
-                'message' => 'Rental request not found'
+                'message' => 'Rental request not found',
             ], 404);
         }
 
@@ -240,14 +246,14 @@ class RentalRequestController extends Controller
         if ($rentalRequest->property->landlord_id !== $user->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
+                'message' => 'Unauthorized',
             ], 403);
         }
 
         if ($rentalRequest->status !== 'pending') {
             return response()->json([
                 'success' => false,
-                'message' => 'Request can only be approved if pending'
+                'message' => 'Request can only be approved if pending',
             ], 400);
         }
 
@@ -269,7 +275,7 @@ class RentalRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Rental request approved successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant']))
+            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
         ]);
     }
 
@@ -280,19 +286,19 @@ class RentalRequestController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->isLandlord()) {
+        if (! $user->isLandlord()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only landlords can reject requests'
+                'message' => 'Only landlords can reject requests',
             ], 403);
         }
 
         $rentalRequest = RentalRequest::with('property')->find($id);
 
-        if (!$rentalRequest) {
+        if (! $rentalRequest) {
             return response()->json([
                 'success' => false,
-                'message' => 'Rental request not found'
+                'message' => 'Rental request not found',
             ], 404);
         }
 
@@ -300,14 +306,14 @@ class RentalRequestController extends Controller
         if ($rentalRequest->property->landlord_id !== $user->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
+                'message' => 'Unauthorized',
             ], 403);
         }
 
         if ($rentalRequest->status === 'rejected') {
             return response()->json([
                 'success' => false,
-                'message' => 'Request is already rejected'
+                'message' => 'Request is already rejected',
             ], 400);
         }
 
@@ -328,7 +334,7 @@ class RentalRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Rental request rejected successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant']))
+            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
         ]);
     }
 }

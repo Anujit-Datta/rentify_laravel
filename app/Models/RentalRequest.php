@@ -21,6 +21,9 @@ class RentalRequest extends Model
         'tenant_phone',
         'national_id',
         'move_in_date',
+        'rental_duration',
+        'monthly_rent',
+        'security_deposit',
         'payment_method',
         'has_pets',
         'current_address',
@@ -29,6 +32,7 @@ class RentalRequest extends Model
         'emergency_contact',
         'emergency_phone',
         'notes',
+        'message_to_landlord',
         'documents',
         'document_path',
         'status',
@@ -43,6 +47,9 @@ class RentalRequest extends Model
     {
         return [
             'move_in_date' => 'date',
+            'rental_duration' => 'integer',
+            'monthly_rent' => 'decimal:2',
+            'security_deposit' => 'decimal:2',
             'num_occupants' => 'integer',
             'terms' => 'boolean',
             'has_pets' => 'boolean',
