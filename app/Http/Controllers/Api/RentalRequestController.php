@@ -150,6 +150,7 @@ class RentalRequestController extends Controller
                 'notes' => $request->notes,
                 'status' => 'pending',
                 'terms' => $request->terms ? 1 : 0,
+                'request_date' => now(),
             ];
 
             // Handle document uploads
