@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BlockController;
+use App\Http\Controllers\Api\ContentController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\FavouriteController;
 use App\Http\Controllers\Api\MessageController;
@@ -10,7 +12,10 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PropertyController;
 use App\Http\Controllers\Api\RentalRequestController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\RoommateController;
+use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\WalletController;
 use Illuminate\Http\Request;
@@ -38,6 +43,20 @@ Route::middleware('auth.optional')->group(function () {
     Route::get('/properties', [PropertyController::class, 'index']);
     Route::get('/properties/{id}', [PropertyController::class, 'show']);
     Route::get('/properties/{id}/reviews', [ReviewController::class, 'getPropertyReviews']);
+
+    // Search routes (public)
+    Route::get('/search/suggestions', [SearchController::class, 'suggestions']);
+    Route::get('/search/advanced', [SearchController::class, 'advanced']);
+    Route::get('/search/filters', [SearchController::class, 'filters']);
+
+    // Featured and recent properties (public)
+    Route::get('/properties/featured', [SearchController::class, 'featuredProperties']);
+    Route::get('/properties/recent', [SearchController::class, 'recentProperties']);
+
+    // Roommate search (public)
+    Route::get('/roommates', [RoommateController::class, 'index']);
+    Route::get('/roommates/{id}', [RoommateController::class, 'show']);
+    Route::get('/roommates/filters', [RoommateController::class, 'filters']);
 });
 
 // Protected routes
@@ -111,6 +130,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{userId}', [MessageController::class, 'sendMessage']);
         Route::post('/{userId}/read', [MessageController::class, 'markAsRead']);
         Route::get('/unread-count', [MessageController::class, 'unreadCount']);
+        Route::delete('/conversation/{userId}', [MessageController::class, 'deleteConversation']);
+        Route::delete('/message/{messageId}', [MessageController::class, 'deleteMessage']);
+        Route::post('/upload', [MessageController::class, 'upload']);
     });
 
     // Notification routes
@@ -140,6 +162,34 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/balance', [WalletController::class, 'balance']);
         Route::post('/add-money', [WalletController::class, 'addMoney']);
         Route::get('/transactions', [WalletController::class, 'transactions']);
+    });
+
+    // Block/Unblock User routes
+    Route::prefix('blocked-users')->group(function () {
+        Route::get('/', [BlockController::class, 'index']);
+        Route::post('/', [BlockController::class, 'store']);
+        Route::delete('/{userId}', [BlockController::class, 'destroy']);
+        Route::get('/check/{userId}', [BlockController::class, 'check']);
+    });
+
+    // Report routes
+    Route::prefix('reports')->group(function () {
+        Route::get('/my-reports', [ReportController::class, 'myReports']);
+        Route::post('/property/{propertyId}', [ReportController::class, 'submitPropertyReport']);
+        Route::post('/user', [ReportController::class, 'submitUserReport']);
+    });
+
+    // Roommate profile creation (if users can create their own)
+    Route::post('/roommates', [RoommateController::class, 'store']);
+
+    // Content routes (FAQ, About, Privacy, Terms, Contact, Settings)
+    Route::prefix('content')->group(function () {
+        Route::get('/faq', [ContentController::class, 'faq']);
+        Route::get('/about', [ContentController::class, 'about']);
+        Route::get('/privacy', [ContentController::class, 'privacy']);
+        Route::get('/terms', [ContentController::class, 'terms']);
+        Route::get('/contact', [ContentController::class, 'contact']);
+        Route::get('/settings', [ContentController::class, 'settings']);
     });
 
     // Admin routes

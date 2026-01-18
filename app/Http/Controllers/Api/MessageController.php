@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
@@ -182,5 +183,132 @@ class MessageController extends Controller
                 'unread_count' => $count
             ]
         ]);
+    }
+
+    /**
+     * Delete a conversation with a user (all messages).
+     */
+    public function deleteConversation($userId)
+    {
+        $user = Auth::user();
+
+        // Check if user exists
+        $otherUser = User::find($userId);
+        if (!$otherUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        // Delete all messages between these users (soft delete by setting is_active to false)
+        Message::where(function ($q) use ($user, $userId) {
+            $q->where(function ($q) use ($user, $userId) {
+                $q->where('sender_id', $user->id)
+                  ->where('receiver_id', $userId);
+            })->orWhere(function ($q) use ($user, $userId) {
+                $q->where('sender_id', $userId)
+                  ->where('receiver_id', $user->id);
+            });
+        })->update(['is_active' => false]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation deleted successfully'
+        ]);
+    }
+
+    /**
+     * Delete a specific message.
+     */
+    public function deleteMessage($messageId)
+    {
+        $user = Auth::user();
+
+        $message = Message::find($messageId);
+
+        if (!$message) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message not found'
+            ], 404);
+        }
+
+        // Check if user owns this message
+        if ($message->sender_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        // Soft delete the message
+        $message->update(['is_active' => false]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Message deleted successfully'
+        ]);
+    }
+
+    /**
+     * Upload a file for message attachment.
+     */
+    public function upload(Request $request)
+    {
+        $user = Auth::user();
+
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|file|max:10240', // 10MB max
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+
+            // Check file type
+            $allowedMimes = [
+                'image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp',
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ];
+
+            if (!in_array($file->getMimeType(), $allowedMimes)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid file type. Only images, PDF, and documents are allowed.'
+                ], 400);
+            }
+
+            // Generate unique filename
+            $filename = 'chat_' . $user->id . '_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            // Store file
+            $path = $file->storeAs('chat-files', $filename, 'public');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File uploaded successfully',
+                'data' => [
+                    'file_path' => 'storage/' . $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                    'file_type' => $file->getMimeType(),
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No file uploaded'
+        ], 400);
     }
 }
