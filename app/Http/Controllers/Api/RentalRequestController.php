@@ -95,7 +95,6 @@ class RentalRequestController extends Controller
                 'emergency_contact' => 'nullable|string|max:255',
                 'emergency_phone' => 'nullable|string|max:20',
                 'notes' => 'nullable|string|max:1000',
-                'message_to_landlord' => 'nullable|string|max:1000',
                 'documents' => 'nullable|array',
                 'documents.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
                 'terms' => 'required|accepted',
@@ -149,7 +148,6 @@ class RentalRequestController extends Controller
                 'emergency_contact' => $request->emergency_contact,
                 'emergency_phone' => $request->emergency_phone,
                 'notes' => $request->notes,
-                'message_to_landlord' => $request->message_to_landlord,
                 'status' => 'pending',
                 'terms' => $request->terms ? 1 : 0,
             ];
