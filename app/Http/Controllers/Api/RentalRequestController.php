@@ -66,121 +66,146 @@ class RentalRequestController extends Controller
      */
     public function store(Request $request)
     {
-        $user = Auth::user();
+        try {
+            $user = Auth::user();
 
-        if (! $user->isTenant()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only tenants can submit rental requests',
-            ], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'property_id' => 'required|exists:properties,id',
-            'unit_id' => 'nullable|exists:property_units,id',
-            'move_in_date' => 'required|date|after:today',
-            'rental_duration' => 'required|integer|min:1|max:60', // in months (max 5 years)
-            'monthly_rent' => 'required|numeric|min:0',
-            'security_deposit' => 'required|numeric|min:0',
-            'payment_method' => 'nullable|in:bank_transfer,hand_cash,mobile_banking,check',
-            'has_pets' => 'required|boolean',
-            'current_address' => 'nullable|string',
-            'num_occupants' => 'nullable|integer|min:1',
-            'occupation' => 'nullable|string|max:100',
-            'emergency_contact' => 'nullable|string|max:255',
-            'emergency_phone' => 'nullable|string|max:20',
-            'notes' => 'nullable|string|max:1000',
-            'message_to_landlord' => 'nullable|string|max:1000',
-            'documents' => 'nullable|array',
-            'documents.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
-            'terms' => 'required|accepted',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $property = Property::find($request->property_id);
-
-        if (! $property) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Property not found',
-            ], 404);
-        }
-
-        // Check if tenant already has a pending request for this property
-        $existingRequest = RentalRequest::where('tenant_id', $user->id)
-            ->where('property_id', $request->property_id)
-            ->whereIn('status', ['pending', 'approved'])
-            ->first();
-
-        if ($existingRequest) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You already have an active request for this property',
-            ], 400);
-        }
-
-        $data = [
-            'property_id' => $request->property_id,
-            'unit_id' => $request->unit_id,
-            'tenant_id' => $user->id,
-            'property_name' => $property->property_name,
-            'tenant_name' => $user->name,
-            'tenant_email' => $user->email,
-            'tenant_phone' => $user->phone ?? '',
-            'national_id' => $user->nid_number,
-            'move_in_date' => $request->move_in_date,
-            'rental_duration' => $request->rental_duration,
-            'monthly_rent' => $request->monthly_rent,
-            'security_deposit' => $request->security_deposit,
-            'payment_method' => $request->payment_method,
-            'has_pets' => $request->has_pets,
-            'current_address' => $request->current_address,
-            'num_occupants' => $request->num_occupants,
-            'occupation' => $request->occupation,
-            'emergency_contact' => $request->emergency_contact,
-            'emergency_phone' => $request->emergency_phone,
-            'notes' => $request->notes,
-            'message_to_landlord' => $request->message_to_landlord,
-            'status' => 'pending',
-            'terms' => true,
-        ];
-
-        // Handle document uploads
-        if ($request->hasFile('documents')) {
-            $documentPaths = [];
-            foreach ($request->file('documents') as $document) {
-                $filename = time().'_'.Str::random(10).'.'.$document->getClientOriginalExtension();
-                $path = $document->storeAs('rental-documents', $filename, 'public');
-                $documentPaths[] = $path;
+            if (! $user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated',
+                ], 401);
             }
-            $data['documents'] = json_encode($documentPaths);
-            $data['document_path'] = $documentPaths[0] ?? null;
+
+            if (! $user->isTenant()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only tenants can submit rental requests',
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'property_id' => 'required|integer|exists:properties,id',
+                'unit_id' => 'nullable|integer|exists:property_units,id',
+                'move_in_date' => 'required|date|after_or_equal:today',
+                'rental_duration' => 'required|integer|min:1|max:60', // in months (max 5 years)
+                'monthly_rent' => 'required|numeric|min:0',
+                'security_deposit' => 'required|numeric|min:0',
+                'payment_method' => 'nullable|in:bank_transfer,hand_cash,mobile_banking,check',
+                'has_pets' => 'required|boolean',
+                'current_address' => 'nullable|string',
+                'num_occupants' => 'nullable|integer|min:1',
+                'occupation' => 'nullable|string|max:100',
+                'emergency_contact' => 'nullable|string|max:255',
+                'emergency_phone' => 'nullable|string|max:20',
+                'notes' => 'nullable|string|max:1000',
+                'message_to_landlord' => 'nullable|string|max:1000',
+                'documents' => 'nullable|array',
+                'documents.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:5120',
+                'terms' => 'required|accepted',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $property = Property::find($request->property_id);
+
+            if (! $property) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Property not found',
+                ], 404);
+            }
+
+            // Check if tenant already has a pending request for this property
+            $existingRequest = RentalRequest::where('tenant_id', $user->id)
+                ->where('property_id', $request->property_id)
+                ->whereIn('status', ['pending', 'approved'])
+                ->first();
+
+            if ($existingRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You already have an active request for this property',
+                ], 400);
+            }
+
+            $data = [
+                'property_id' => $request->property_id,
+                'unit_id' => $request->unit_id,
+                'tenant_id' => $user->id,
+                'property_name' => $property->property_name,
+                'tenant_name' => $user->name,
+                'tenant_email' => $user->email,
+                'tenant_phone' => $user->phone ?? '',
+                'national_id' => $user->nid_number,
+                'move_in_date' => $request->move_in_date,
+                'rental_duration' => $request->rental_duration,
+                'monthly_rent' => $request->monthly_rent,
+                'security_deposit' => $request->security_deposit,
+                'payment_method' => $request->payment_method,
+                'has_pets' => $request->has_pets,
+                'current_address' => $request->current_address,
+                'num_occupants' => $request->num_occupants,
+                'occupation' => $request->occupation,
+                'emergency_contact' => $request->emergency_contact,
+                'emergency_phone' => $request->emergency_phone,
+                'notes' => $request->notes,
+                'message_to_landlord' => $request->message_to_landlord,
+                'status' => 'pending',
+                'terms' => true,
+            ];
+
+            // Handle document uploads
+            if ($request->hasFile('documents')) {
+                $documentPaths = [];
+                foreach ($request->file('documents') as $document) {
+                    $filename = time().'_'.Str::random(10).'.'.$document->getClientOriginalExtension();
+                    $path = $document->storeAs('rental-documents', $filename, 'public');
+                    $documentPaths[] = $path;
+                }
+                $data['documents'] = json_encode($documentPaths);
+                $data['document_path'] = $documentPaths[0] ?? null;
+            }
+
+            $rentalRequest = RentalRequest::create($data);
+
+            // Create notification for landlord
+            \App\Models\Notification::create([
+                'user_id' => $property->landlord_id,
+                'type' => 'request',
+                'title' => 'New Rental Request',
+                'message' => "New rental request from {$user->name} for your property: {$property->property_name}",
+                'related_id' => $rentalRequest->id,
+                'is_read' => false,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rental request submitted successfully',
+                'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
+            ], 201);
+
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Rental request creation failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Server Error: ' . $e->getMessage(),
+                'debug' => config('app.debug') ? [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ] : null,
+            ], 500);
         }
-
-        $rentalRequest = RentalRequest::create($data);
-
-        // Create notification for landlord
-        Notification::create([
-            'user_id' => $property->landlord_id,
-            'type' => 'request',
-            'title' => 'New Rental Request',
-            'message' => "New rental request from {$user->name} for your property: {$property->property_name}",
-            'related_id' => $rentalRequest->id,
-            'is_read' => false,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Rental request submitted successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
-        ], 201);
     }
 
     /**
