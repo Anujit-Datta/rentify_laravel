@@ -21,7 +21,7 @@ class RentalRequestResource extends JsonResource
             'national_id' => $this->national_id,
             'move_in_date' => $this->move_in_date?->format('Y-m-d'),
             'payment_method' => $this->payment_method,
-            'has_pets' => $this->has_pets,
+            'has_pets' => $this->has_pets === 'yes',
             'current_address' => $this->current_address,
             'num_occupants' => $this->num_occupants ? (int) $this->num_occupants : null,
             'occupation' => $this->occupation,
@@ -37,6 +37,7 @@ class RentalRequestResource extends JsonResource
             'contract_id' => $this->contract_id,
             'request_date' => $this->request_date?->toDateTimeString(),
             'approved_at' => $this->approved_at?->toDateTimeString(),
+            'property_rent' => $this->when($this->relationLoaded('property'), fn () => $this->property->rent),
 
             'property' => $this->when($this->relationLoaded('property'), fn () => new PropertyResource($this->property)),
             'unit' => $this->when($this->relationLoaded('unit'), fn () => $this->unit),

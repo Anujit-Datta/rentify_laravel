@@ -122,6 +122,12 @@ class PropertyController extends Controller
      */
     public function store(Request $request)
     {
+        \Log::info('Property creation request received', [
+            'user_id' => Auth::id(),
+            'user_email' => Auth::user()?->email,
+            'request_data' => $request->except(['image']),
+        ]);
+
         $validator = Validator::make($request->all(), [
             'property_name' => 'required|string|max:255',
             'location' => 'required|string|max:255',
@@ -135,6 +141,8 @@ class PropertyController extends Controller
             'floor' => 'nullable|string|max:50',
             'parking' => 'boolean',
             'furnished' => 'boolean',
+            'featured' => 'boolean',
+            'available' => 'boolean',
             'image' => 'nullable|image|max:5120',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
@@ -143,6 +151,11 @@ class PropertyController extends Controller
         ]);
 
         if ($validator->fails()) {
+            \Log::warning('Property validation failed', [
+                'user_id' => Auth::id(),
+                'errors' => $validator->errors()->toArray(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -154,7 +167,11 @@ class PropertyController extends Controller
         $data['landlord_id'] = Auth::id();
         $data['landlord'] = Auth::user()->name;
         $data['posted_date'] = now();
-        $data['available'] = true;
+
+        // Set default available if not provided (but don't override if sent)
+        if (!isset($data['available'])) {
+            $data['available'] = true;
+        }
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -166,15 +183,46 @@ class PropertyController extends Controller
             $image->move($destinationPath, $filename);
 
             $data['image'] = 'uploads/properties/' . $filename;
+
+            \Log::info('Property image uploaded', [
+                'user_id' => Auth::id(),
+                'filename' => $filename,
+                'path' => $data['image'],
+            ]);
         }
 
-        $property = Property::create($data);
+        try {
+            $property = Property::create($data);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Property created successfully',
-            'data' => new PropertyResource($property->load('landlord'))
-        ], 201);
+            \Log::info('Property created successfully', [
+                'property_id' => $property->id,
+                'user_id' => Auth::id(),
+                'property_name' => $property->property_name,
+                'rent' => $property->rent,
+                'featured' => $property->featured ?? 'not set',
+                'available' => $property->available ?? 'not set',
+                'parking' => $property->parking ?? 'not set',
+                'furnished' => $property->furnished ?? 'not set',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Property created successfully',
+                'data' => new PropertyResource($property->load('landlord'))
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Property creation failed', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $data,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create property: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -216,9 +264,20 @@ class PropertyController extends Controller
      */
     public function update(Request $request, $id)
     {
+        \Log::info('Property update request received', [
+            'user_id' => Auth::id(),
+            'property_id' => $id,
+            'request_data' => $request->except(['image']),
+        ]);
+
         $property = Property::find($id);
 
         if (!$property) {
+            \Log::warning('Property update failed - property not found', [
+                'user_id' => Auth::id(),
+                'property_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Property not found'
@@ -227,6 +286,12 @@ class PropertyController extends Controller
 
         // Check ownership
         if ($property->landlord_id !== Auth::id()) {
+            \Log::warning('Property update failed - unauthorized', [
+                'user_id' => Auth::id(),
+                'property_id' => $id,
+                'property_owner' => $property->landlord_id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
@@ -253,6 +318,12 @@ class PropertyController extends Controller
         ]);
 
         if ($validator->fails()) {
+            \Log::warning('Property update validation failed', [
+                'user_id' => Auth::id(),
+                'property_id' => $id,
+                'errors' => $validator->errors()->toArray(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -277,15 +348,40 @@ class PropertyController extends Controller
             $image->move($destinationPath, $filename);
 
             $data['image'] = 'uploads/properties/' . $filename;
+
+            \Log::info('Property image updated', [
+                'user_id' => Auth::id(),
+                'property_id' => $id,
+                'filename' => $filename,
+            ]);
         }
 
-        $property->update($data);
+        try {
+            $property->update($data);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Property updated successfully',
-            'data' => new PropertyResource($property->load('landlord'))
-        ]);
+            \Log::info('Property updated successfully', [
+                'property_id' => $id,
+                'user_id' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Property updated successfully',
+                'data' => new PropertyResource($property->load('landlord'))
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Property update failed', [
+                'user_id' => Auth::id(),
+                'property_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update property: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -293,9 +389,16 @@ class PropertyController extends Controller
      */
     public function destroy($id)
     {
+        \Log::info('Property deletion request', [
+            'property_id' => $id,
+            'user_id' => Auth::id(),
+            'user_email' => Auth::user()?->email,
+        ]);
+
         $property = Property::find($id);
 
         if (!$property) {
+            \Log::warning('Property not found for deletion', ['property_id' => $id, 'user_id' => Auth::id()]);
             return response()->json([
                 'success' => false,
                 'message' => 'Property not found'
@@ -304,6 +407,11 @@ class PropertyController extends Controller
 
         // Check ownership
         if ($property->landlord_id !== Auth::id()) {
+            \Log::warning('Unauthorized deletion attempt', [
+                'property_id' => $id,
+                'user_id' => Auth::id(),
+                'property_landlord_id' => $property->landlord_id,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
@@ -312,17 +420,25 @@ class PropertyController extends Controller
 
         // Delete images
         if ($property->image && file_exists(public_path($property->image))) {
+            \Log::info('Deleting property image', ['image_path' => $property->image]);
             unlink(public_path($property->image));
         }
 
         foreach ($property->gallery as $image) {
             $imagePath = public_path($image->image_path);
             if (file_exists($imagePath)) {
+                \Log::info('Deleting gallery image', ['image_path' => $image->image_path]);
                 unlink($imagePath);
             }
         }
 
         $property->delete();
+
+        \Log::info('Property deleted successfully', [
+            'property_id' => $id,
+            'property_name' => $property->property_name,
+            'user_id' => Auth::id(),
+        ]);
 
         return response()->json([
             'success' => true,

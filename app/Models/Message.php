@@ -11,6 +11,9 @@ class Message extends Model
 
     protected $table = 'messages';
 
+    // Disable timestamps - table uses 'timestamp' column instead
+    public $timestamps = false;
+
     protected $fillable = [
         'sender_id',
         'receiver_id',
@@ -21,16 +24,14 @@ class Message extends Model
         'sender_role',
         'status',
         'seen',
+        'is_active',
     ];
 
-    protected $casts(): array
-    {
-        return [
-            'is_active' => 'boolean',
-            'seen' => 'boolean',
-            'timestamp' => 'datetime',
-        ];
-    }
+    protected $casts = [
+        'is_active' => 'boolean',
+        'seen' => 'boolean',
+        'timestamp' => 'datetime',
+    ];
 
     public function sender()
     {

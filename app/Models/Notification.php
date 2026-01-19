@@ -19,15 +19,16 @@ class Notification extends Model
         'related_id',
         'is_read',
         'link',
+        'created_at',
     ];
 
-    protected $casts(): array
-    {
-        return [
-            'is_read' => 'boolean',
-            'created_at' => 'datetime',
-        ];
-    }
+    // Only use created_at, not updated_at
+    const UPDATED_AT = null;
+
+    protected $casts = [
+        'is_read' => 'boolean',
+        'created_at' => 'datetime',
+    ];
 
     public function user()
     {

@@ -244,7 +244,19 @@ class RentalRequestController extends Controller
     {
         $user = Auth::user();
 
+        \Log::info('Rental request approve request received', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'request_id' => $id,
+        ]);
+
         if (! $user->isLandlord()) {
+            \Log::warning('Rental request approve failed - not a landlord', [
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'request_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Only landlords can approve requests',
@@ -254,6 +266,11 @@ class RentalRequestController extends Controller
         $rentalRequest = RentalRequest::with('property')->find($id);
 
         if (! $rentalRequest) {
+            \Log::warning('Rental request approve failed - request not found', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Rental request not found',
@@ -262,6 +279,12 @@ class RentalRequestController extends Controller
 
         // Check ownership
         if ($rentalRequest->property->landlord_id !== $user->id) {
+            \Log::warning('Rental request approve failed - unauthorized', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+                'property_owner' => $rentalRequest->property->landlord_id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized',
@@ -269,32 +292,59 @@ class RentalRequestController extends Controller
         }
 
         if ($rentalRequest->status !== 'pending') {
+            \Log::warning('Rental request approve failed - not pending', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+                'current_status' => $rentalRequest->status,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Request can only be approved if pending',
             ], 400);
         }
 
-        $rentalRequest->update([
-            'status' => 'approved',
-            'approved_at' => now(),
-        ]);
+        try {
+            $rentalRequest->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+            ]);
 
-        // Create notification for tenant
-        Notification::create([
-            'user_id' => $rentalRequest->tenant_id,
-            'type' => 'request',
-            'title' => 'Rental Request Approved',
-            'message' => "Your rental request for {$rentalRequest->property_name} has been approved",
-            'related_id' => $rentalRequest->id,
-            'is_read' => false,
-        ]);
+            // Create notification for tenant
+            Notification::create([
+                'user_id' => $rentalRequest->tenant_id,
+                'type' => 'request',
+                'title' => 'Rental Request Approved',
+                'message' => "Your rental request for {$rentalRequest->property_name} has been approved",
+                'related_id' => $rentalRequest->id,
+                'is_read' => false,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Rental request approved successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
-        ]);
+            \Log::info('Rental request approved successfully', [
+                'request_id' => $id,
+                'landlord_id' => $user->id,
+                'tenant_id' => $rentalRequest->tenant_id,
+                'property_id' => $rentalRequest->property_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rental request approved successfully',
+                'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Rental request approve failed', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to approve request: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -304,7 +354,20 @@ class RentalRequestController extends Controller
     {
         $user = Auth::user();
 
+        \Log::info('Rental request reject request received', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'request_id' => $id,
+            'reason' => $request->input('reason'),
+        ]);
+
         if (! $user->isLandlord()) {
+            \Log::warning('Rental request reject failed - not a landlord', [
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'request_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Only landlords can reject requests',
@@ -314,6 +377,11 @@ class RentalRequestController extends Controller
         $rentalRequest = RentalRequest::with('property')->find($id);
 
         if (! $rentalRequest) {
+            \Log::warning('Rental request reject failed - request not found', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Rental request not found',
@@ -322,6 +390,12 @@ class RentalRequestController extends Controller
 
         // Check ownership
         if ($rentalRequest->property->landlord_id !== $user->id) {
+            \Log::warning('Rental request reject failed - unauthorized', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+                'property_owner' => $rentalRequest->property->landlord_id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized',
@@ -329,30 +403,56 @@ class RentalRequestController extends Controller
         }
 
         if ($rentalRequest->status === 'rejected') {
+            \Log::warning('Rental request reject failed - already rejected', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Request is already rejected',
             ], 400);
         }
 
-        $rentalRequest->update([
-            'status' => 'rejected',
-        ]);
+        try {
+            $rentalRequest->update([
+                'status' => 'rejected',
+            ]);
 
-        // Create notification for tenant
-        Notification::create([
-            'user_id' => $rentalRequest->tenant_id,
-            'type' => 'request',
-            'title' => 'Rental Request Rejected',
-            'message' => "Your rental request for {$rentalRequest->property_name} has been rejected",
-            'related_id' => $rentalRequest->id,
-            'is_read' => false,
-        ]);
+            // Create notification for tenant
+            Notification::create([
+                'user_id' => $rentalRequest->tenant_id,
+                'type' => 'request',
+                'title' => 'Rental Request Rejected',
+                'message' => "Your rental request for {$rentalRequest->property_name} has been rejected",
+                'related_id' => $rentalRequest->id,
+                'is_read' => false,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Rental request rejected successfully',
-            'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
-        ]);
+            \Log::info('Rental request rejected successfully', [
+                'request_id' => $id,
+                'landlord_id' => $user->id,
+                'tenant_id' => $rentalRequest->tenant_id,
+                'property_id' => $rentalRequest->property_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rental request rejected successfully',
+                'data' => new RentalRequestResource($rentalRequest->load(['property', 'unit', 'tenant'])),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Rental request reject failed', [
+                'user_id' => $user->id,
+                'request_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reject request: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

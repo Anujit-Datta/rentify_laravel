@@ -16,17 +16,18 @@ class WalletBalance extends Model
         'balance',
         'monthly_added',
         'last_reset_date',
+        'updated_at',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'balance' => 'decimal:2',
-            'monthly_added' => 'decimal:2',
-            'last_reset_date' => 'date',
-            'updated_at' => 'datetime',
-        ];
-    }
+    // Only use updated_at, not created_at
+    const CREATED_AT = null;
+
+    protected $casts = [
+        'balance' => 'decimal:2',
+        'monthly_added' => 'decimal:2',
+        'last_reset_date' => 'date',
+        'updated_at' => 'datetime',
+    ];
 
     public function user()
     {
