@@ -66,6 +66,20 @@ class PropertyResource extends JsonResource
             'total_floors' => (int) $this->total_floors,
             'is_verified' => (bool) $this->is_verified,
 
+            // Utility Bills & Charges
+            'utility_bills' => [
+                'electricity_rate' => $this->electricity_rate ? (float) $this->electricity_rate : null,
+                'meter_rent' => $this->meter_rent ? (float) $this->meter_rent : null,
+                'water_bill' => $this->water_bill ? (float) $this->water_bill : null,
+                'has_water_bill' => (bool) $this->has_water_bill,
+                'gas_bill' => $this->gas_bill ? (float) $this->gas_bill : null,
+                'has_gas_bill' => (bool) $this->has_gas_bill,
+                'service_charge' => $this->service_charge ? (float) $this->service_charge : null,
+                'has_service_charge' => (bool) $this->has_service_charge,
+                'other_charges' => $this->other_charges ? (float) $this->other_charges : null,
+                'has_other_charges' => (bool) $this->has_other_charges,
+            ],
+
             // Relationships
             'landlord_data' => $this->when($this->landlord_id && $this->relationLoaded('landlord'), function () {
                 $landlord = $this->getRelation('landlord');

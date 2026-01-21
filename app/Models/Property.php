@@ -45,6 +45,17 @@ class Property extends Model
         'thumbnail',
         'landlord_id',
         'is_verified',
+        // Utility Bills & Charges
+        'electricity_rate',
+        'meter_rent',
+        'water_bill',
+        'has_water_bill',
+        'gas_bill',
+        'has_gas_bill',
+        'service_charge',
+        'has_service_charge',
+        'other_charges',
+        'has_other_charges',
     ];
 
     protected function casts(): array
@@ -64,6 +75,17 @@ class Property extends Model
             'latitude' => 'decimal:6',
             'longitude' => 'decimal:6',
             'created_at' => 'datetime',
+            // Utility Bills & Charges
+            'electricity_rate' => 'decimal:2',
+            'meter_rent' => 'decimal:2',
+            'water_bill' => 'decimal:2',
+            'has_water_bill' => 'boolean',
+            'gas_bill' => 'decimal:2',
+            'has_gas_bill' => 'boolean',
+            'service_charge' => 'decimal:2',
+            'has_service_charge' => 'boolean',
+            'other_charges' => 'decimal:2',
+            'has_other_charges' => 'boolean',
         ];
     }
 

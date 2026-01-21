@@ -148,6 +148,17 @@ class PropertyController extends Controller
             'longitude' => 'nullable|numeric',
             'is_building' => 'boolean',
             'total_floors' => 'nullable|integer|min:1',
+            // Utility Bills & Charges (optional)
+            'electricity_rate' => 'nullable|numeric|min:0',
+            'meter_rent' => 'nullable|numeric|min:0',
+            'water_bill' => 'nullable|numeric|min:0',
+            'has_water_bill' => 'boolean',
+            'gas_bill' => 'nullable|numeric|min:0',
+            'has_gas_bill' => 'boolean',
+            'service_charge' => 'nullable|numeric|min:0',
+            'has_service_charge' => 'boolean',
+            'other_charges' => 'nullable|numeric|min:0',
+            'has_other_charges' => 'boolean',
         ]);
 
         if ($validator->fails()) {
@@ -315,6 +326,17 @@ class PropertyController extends Controller
             'available' => 'boolean',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
+            // Utility Bills & Charges (optional)
+            'electricity_rate' => 'nullable|numeric|min:0',
+            'meter_rent' => 'nullable|numeric|min:0',
+            'water_bill' => 'nullable|numeric|min:0',
+            'has_water_bill' => 'boolean',
+            'gas_bill' => 'nullable|numeric|min:0',
+            'has_gas_bill' => 'boolean',
+            'service_charge' => 'nullable|numeric|min:0',
+            'has_service_charge' => 'boolean',
+            'other_charges' => 'nullable|numeric|min:0',
+            'has_other_charges' => 'boolean',
         ]);
 
         if ($validator->fails()) {
