@@ -98,8 +98,19 @@ class PropertyResource extends JsonResource
             'reviews' => $this->whenLoaded('reviews'),
             'favourited' => isset($this->favourited) ? (bool) $this->favourited :
                           (isset($this->favourited_count) ? ($this->favourited_count > 0) : false),
-            'rented_by_me' => isset($this->rented_by_me) ? (bool) $this->rented_by_me :
-                            (isset($this->rented_by_me_count) ? ($this->rented_by_me_count > 0) : false),
+            'rented_by_me' => $this->resolveRentedByMe(),
         ];
+    }
+
+    protected function resolveRentedByMe(): bool
+    {
+        $hasRental = isset($this->rented_by_me)
+            ? (bool) $this->rented_by_me
+            : (isset($this->rented_by_me_count) ? ($this->rented_by_me_count > 0) : false);
+
+        $hasRequest = (int) ($this->active_requests_by_me ?? 0) > 0;
+        $hasContract = (int) ($this->active_contracts_by_me ?? 0) > 0;
+
+        return $hasRental || $hasRequest || $hasContract;
     }
 }

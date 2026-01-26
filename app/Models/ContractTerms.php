@@ -11,6 +11,11 @@ class ContractTerms extends Model
 
     protected $table = 'contract_terms';
 
+    /**
+     * Disable automatic timestamps.
+     */
+    public $timestamps = false;
+
     protected $fillable = [
         'contract_id',
         'monthly_rent',
@@ -57,12 +62,11 @@ class ContractTerms extends Model
             'pets_allowed' => 'boolean',
             'smoking_allowed' => 'boolean',
             'subletting_allowed' => 'boolean',
-            'guests_allowed' => 'boolean',
-            'max_occupants' => 'integer',
-            'tenant_notice_days' => 'integer',
-            'landlord_notice_days' => 'integer',
-            'created_at' => 'datetime',
-        ];
+        'guests_allowed' => 'boolean',
+        'max_occupants' => 'integer',
+        'tenant_notice_days' => 'integer',
+        'landlord_notice_days' => 'integer',
+    ];
     }
 
     public function contract()

@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RentalRequestResource;
+use App\Models\Contract;
 use App\Models\Notification;
 use App\Models\Property;
 use App\Models\RentalRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -263,7 +265,7 @@ class RentalRequestController extends Controller
             ], 403);
         }
 
-        $rentalRequest = RentalRequest::with('property')->find($id);
+        $rentalRequest = RentalRequest::with(['property.rentSettings'])->find($id);
 
         if (! $rentalRequest) {
             \Log::warning('Rental request approve failed - request not found', [
@@ -304,21 +306,64 @@ class RentalRequestController extends Controller
             ], 400);
         }
 
-        try {
-            $rentalRequest->update([
-                'status' => 'approved',
-                'approved_at' => now(),
-            ]);
+        if ($rentalRequest->contract_id || Contract::where('rental_request_id', $rentalRequest->id)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contract already exists for this request',
+            ], 400);
+        }
 
-            // Create notification for tenant
-            Notification::create([
-                'user_id' => $rentalRequest->tenant_id,
-                'type' => 'request',
-                'title' => 'Rental Request Approved',
-                'message' => "Your rental request for {$rentalRequest->property_name} has been approved",
-                'related_id' => $rentalRequest->id,
-                'is_read' => false,
-            ]);
+        $isSingleUnit = $rentalRequest->unit_id === null || ! $rentalRequest->property->units()->exists();
+
+        $contractTerms = $this->buildContractTerms($request, $rentalRequest);
+        $validator = Validator::make($contractTerms, [
+            'monthly_rent' => 'required|numeric|min:0',
+            'security_deposit' => 'required|numeric|min:0',
+            'start_date' => 'required|date',
+            'duration_months' => 'required|integer|min:1',
+            'payment_day' => 'required|integer|min:1|max:31',
+            'late_fee_per_day' => 'required|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($rentalRequest, $user, $contractTerms, $isSingleUnit) {
+                $rentalRequest->update([
+                    'status' => 'approved',
+                    'approved_at' => now(),
+                ]);
+
+                Notification::create([
+                    'user_id' => $rentalRequest->tenant_id,
+                    'type' => 'request',
+                    'title' => 'Rental Request Approved',
+                    'message' => "Your rental request for {$rentalRequest->property_name} has been approved",
+                    'related_id' => $rentalRequest->id,
+                    'is_read' => false,
+                ]);
+
+                app(ContractController::class)->createContractFromRequest(
+                    $rentalRequest,
+                    $user,
+                    $contractTerms
+                );
+
+                if ($isSingleUnit) {
+                    RentalRequest::where('property_id', $rentalRequest->property_id)
+                        ->where('id', '!=', $rentalRequest->id)
+                        ->where('status', 'pending')
+                        ->update(['status' => 'rejected']);
+                }
+            });
+
+            $rentalRequest->refresh();
 
             \Log::info('Rental request approved successfully', [
                 'request_id' => $id,
@@ -374,7 +419,7 @@ class RentalRequestController extends Controller
             ], 403);
         }
 
-        $rentalRequest = RentalRequest::with('property')->find($id);
+        $rentalRequest = RentalRequest::with(['property.rentSettings'])->find($id);
 
         if (! $rentalRequest) {
             \Log::warning('Rental request reject failed - request not found', [
@@ -454,5 +499,37 @@ class RentalRequestController extends Controller
                 'message' => 'Failed to reject request: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    protected function buildContractTerms(Request $request, RentalRequest $rentalRequest): array
+    {
+        $startDate = $request->input('start_date');
+        if (! $startDate && $rentalRequest->move_in_date) {
+            $startDate = $rentalRequest->move_in_date->format('Y-m-d');
+        }
+
+        return [
+            'monthly_rent' => $request->input('monthly_rent'),
+            'security_deposit' => $request->input('security_deposit'),
+            'advance_payment' => $request->input('advance_payment'),
+            'start_date' => $startDate,
+            'duration_months' => $request->input('duration_months'),
+            'payment_day' => $request->input('payment_day'),
+            'late_fee_per_day' => $request->input('late_fee_per_day'),
+            'utilities_included' => $request->input('utilities_included'),
+            'electricity_included' => $request->input('electricity_included'),
+            'water_included' => $request->input('water_included'),
+            'gas_included' => $request->input('gas_included'),
+            'internet_included' => $request->input('internet_included'),
+            'maintenance_by' => $request->input('maintenance_by'),
+            'major_repairs_by' => $request->input('major_repairs_by'),
+            'pets_allowed' => $request->input('pets_allowed'),
+            'smoking_allowed' => $request->input('smoking_allowed'),
+            'subletting_allowed' => $request->input('subletting_allowed'),
+            'guests_allowed' => $request->input('guests_allowed'),
+            'max_occupants' => $request->input('max_occupants'),
+            'special_terms' => $request->input('special_terms'),
+            'additional_clauses' => $request->input('additional_clauses'),
+        ];
     }
 }

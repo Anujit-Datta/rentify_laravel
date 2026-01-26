@@ -107,6 +107,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [ContractController::class, 'index']);
         Route::get('/{id}', [ContractController::class, 'show']);
         Route::post('/request/{requestId}/generate', [ContractController::class, 'generate'])->middleware('check-role:landlord');
+        Route::put('/{id}', [ContractController::class, 'updateTerms'])->middleware('check-role:landlord');
+        Route::post('/{id}/convert-to-rental', [ContractController::class, 'convertToRental'])->middleware('check-role:landlord');
+        Route::post('/{id}/cancel', [ContractController::class, 'cancel'])->middleware('check-role:landlord');
         Route::get('/{id}/pdf', [ContractController::class, 'downloadPdf']);
         Route::post('/{id}/sign', [ContractController::class, 'sign']);
         Route::get('/{contractId}/verify', [ContractController::class, 'verify']);

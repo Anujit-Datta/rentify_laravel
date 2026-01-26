@@ -84,6 +84,16 @@ class PropertyController extends Controller
                 $q->where('tenant_id', $userId)
                   ->where('status', 'active');
             }]);
+
+            $query->withCount(['rentalRequests as active_requests_by_me' => function ($q) use ($userId) {
+                $q->where('tenant_id', $userId)
+                  ->whereIn('status', ['pending', 'approved', 'accepted']);
+            }]);
+
+            $query->withCount(['contracts as active_contracts_by_me' => function ($q) use ($userId) {
+                $q->where('tenant_id', $userId)
+                  ->whereNotIn('status', ['cancelled', 'terminated']);
+            }]);
         }
 
         // Search
@@ -262,6 +272,16 @@ class PropertyController extends Controller
                 ->where('tenant_id', $userId)
                 ->where('status', 'active')
                 ->exists();
+
+            $property->active_requests_by_me = $property->rentalRequests()
+                ->where('tenant_id', $userId)
+                ->whereIn('status', ['pending', 'approved', 'accepted'])
+                ->exists() ? 1 : 0;
+
+            $property->active_contracts_by_me = $property->contracts()
+                ->where('tenant_id', $userId)
+                ->whereNotIn('status', ['cancelled', 'terminated'])
+                ->exists() ? 1 : 0;
         }
 
         return response()->json([
